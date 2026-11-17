@@ -13,6 +13,10 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: fork-release-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -26,7 +30,7 @@ env:
 jobs:
   icons:
     if: github.repository == 'partiizan/pod'
-    runs-on: macos-15
+    runs-on: windows-2022
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
@@ -83,6 +87,11 @@ jobs:
         uses: jdx/mise-action@v4
         with:
           install_args: rust@nightly actionlint
+      - name: Install Rust validation components
+        if: runner.os == 'macOS'
+        run: |
+          rustup component add clippy --toolchain 1.96.0
+          rustup component add rustfmt --toolchain nightly
       - name: Validate workflow and Rust formatting
         if: runner.os == 'macOS'
         run: |
@@ -135,7 +144,7 @@ jobs:
   candidate:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: package
-    runs-on: macos-15
+    runs-on: windows-2022
     permissions:
       contents: write
     outputs:
@@ -180,7 +189,7 @@ jobs:
 
   publish:
     needs: candidate
-    runs-on: macos-15
+    runs-on: windows-2022
     permissions:
       contents: write
     steps:
@@ -199,7 +208,7 @@ jobs:
           test "$candidate_sha" = "$GITHUB_SHA"
           mkdir dist
           gh release download "$CANDIDATE_TAG" --dir dist
-          (cd dist && shasum -a 256 -c SHA256SUMS.txt)
+          (cd dist && sha256sum -c SHA256SUMS.txt)
           # Existing version tags are immutable: a rerun must not replace a release.
           gh release create "$VERSION" dist/* --target "$GITHUB_SHA" \
             --title "Pod $VERSION — Windows and macOS" --notes-file docs/releases/0.7.7.md

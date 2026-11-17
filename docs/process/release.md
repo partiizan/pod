@@ -124,3 +124,10 @@ These installers are unsigned and not notarized; automatic updates are disabled.
 identity. Release notes must clearly state these limitations and distinguish automated checks from manual testing.
 For each new version, update `Cargo.toml`, the Pod entry in `Cargo.lock`, `CHANGELOG.md`, and the release notes path in
 `.github/workflows/fork-release.yml`. Only the publication jobs require `contents: write`.
+
+### Current fork platform policy
+
+Ubuntu/Linux build, test, and lint checks are disabled until the repository owner requests their restoration.
+Only Windows x64 and Apple Silicon are release targets. Shared icon preparation and publication run on Windows,
+so an unavailable Apple Silicon runner cannot prevent Windows packaging from starting. Native Mac tests and
+packaging still require an Apple Silicon runner; publication waits for both platforms to succeed.
