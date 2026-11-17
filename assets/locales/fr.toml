@@ -2579,6 +2579,13 @@ sp_value = "%{sp} SP"
 at_v = "%{count}×V"
 rank = "×%{rank}"
 
+[skills.compare_search]
+clear = "Effacer la recherche"
+loading = "Chargement des compétences…"
+no_matches = "Aucune compétence correspondante. Effacez la recherche pour tout afficher."
+placeholder = "Rechercher des compétences…"
+unavailable = "Données indisponibles. Synchronisez vos personnages et rouvrez la comparaison."
+
 [skills.compare_summary]
 skills_at_iv = "Compétences à IV+"
 skills_at_v = "Compétences à V"

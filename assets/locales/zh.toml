@@ -2579,6 +2579,13 @@ sp_value = "%{sp} SP"
 at_v = "%{count}×V"
 rank = "×%{rank}"
 
+[skills.compare_search]
+clear = "清除搜索"
+loading = "正在加载技能…"
+no_matches = "没有匹配的技能。清除搜索以显示所有技能。"
+placeholder = "搜索技能…"
+unavailable = "技能数据不可用。请同步角色并重新打开比较。"
+
 [skills.compare_summary]
 skills_at_iv = "IV+ 级技能"
 skills_at_v = "V 级技能"

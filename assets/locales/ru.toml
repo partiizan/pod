@@ -2579,6 +2579,13 @@ sp_value = "%{sp} SP"
 at_v = "%{count}×V"
 rank = "×%{rank}"
 
+[skills.compare_search]
+clear = "Очистить поиск"
+loading = "Загрузка навыков…"
+no_matches = "Совпадений нет. Очистите поиск, чтобы показать все навыки."
+placeholder = "Поиск навыков…"
+unavailable = "Данные навыков недоступны. Синхронизируйте персонажей и снова откройте сравнение."
+
 [skills.compare_summary]
 skills_at_iv = "Навыки на IV+"
 skills_at_v = "Навыки на V"

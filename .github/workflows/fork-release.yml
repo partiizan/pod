@@ -1,0 +1,204 @@
+name: Fork Windows and macOS Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - Cargo.toml
+      - .github/workflows/fork-release.yml
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_BUILD_JOBS: 2
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  icons:
+    if: github.repository == 'partiizan/pod'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v4
+        with:
+          install_args: yq
+      - name: Generate release icons from the current SDE
+        run: sh scripts/generate/item-images
+      - uses: actions/upload-artifact@v7
+        with:
+          name: fork-item-images
+          path: assets/images/items
+          if-no-files-found: error
+
+  validate:
+    if: github.repository == 'partiizan/pod'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v4
+        with:
+          install_args: rust@1.96.0 rust@nightly actionlint
+      - name: Install Linux dependencies
+        run: sudo apt-get update -q && sudo apt-get install -y libgtk-3-dev libxdo-dev
+      - name: Validate workflow and formatting
+        run: |
+          actionlint .github/workflows/fork-release.yml
+          cargo +nightly fmt --all --check -- --config-path .config/rustfmt.toml
+          git diff --check
+      - name: Check and lint
+        run: |
+          cargo clippy --locked --all-targets --all-features -- -D warnings
+      - name: Test
+        run: cargo test --locked --all-features
+
+  package:
+    if: github.repository == 'partiizan/pod'
+    needs: icons
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            format: nsis,wix
+          - os: macos-15
+            target: aarch64-apple-darwin
+            format: dmg
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            format: dmg
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v4
+        with:
+          install_args: rust@1.96.0 cargo:cargo-packager@0.11.8
+      - uses: actions/download-artifact@v8
+        with:
+          name: fork-item-images
+          path: assets/images/items
+      - name: Install Windows installer tools
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco upgrade wixtoolset nsis -y --no-progress
+      - name: Native platform tests
+        run: cargo test --locked --all-features
+      - name: Build locked release binary
+        run: cargo build --release --locked --target '${{ matrix.target }}'
+      - name: Package
+        run: cargo-packager --release --target '${{ matrix.target }}' --formats '${{ matrix.format }}'
+      - name: Verify macOS bundle
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          dmg=$(find 'target/${{ matrix.target }}/release' -name '*.dmg' -print -quit)
+          test -n "$dmg"
+          hdiutil verify "$dmg"
+          hdiutil attach "$dmg" -nobrowse -mountpoint /Volumes/PodForkVerify
+          trap 'hdiutil detach /Volumes/PodForkVerify' EXIT
+          app=$(find /Volumes/PodForkVerify -maxdepth 1 -name '*.app' -print -quit)
+          test -n "$app"
+          test -x "$app/Contents/MacOS/pod"
+          plutil -lint "$app/Contents/Info.plist"
+          lipo -info "$app/Contents/MacOS/pod"
+      - name: Collect installers
+        run: |
+          python - <<'PY'
+          import pathlib, shutil
+          source = pathlib.Path('target/${{ matrix.target }}/release')
+          destination = pathlib.Path('dist')
+          destination.mkdir()
+          patterns = ['*.dmg'] if '${{ runner.os }}' == 'macOS' else ['*-setup.exe', '*.msi']
+          for pattern in patterns:
+              matches = list(source.rglob(pattern))
+              if len(matches) != 1:
+                  raise SystemExit(f'Expected exactly one {pattern}; found {matches}')
+              shutil.copy2(matches[0], destination / matches[0].name)
+          PY
+      - uses: actions/upload-artifact@v7
+        with:
+          name: fork-installers-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  candidate:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: [validate, package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: fork-installers-*
+          path: dist
+          merge-multiple: true
+      - name: Verify installer set and record checksums
+        run: |
+          python - <<'PY'
+          import hashlib, pathlib
+          files = sorted(pathlib.Path('dist').iterdir())
+          assert len(files) == 4, f'Expected two DMGs, one EXE, one MSI: {files}'
+          assert sum(p.suffix == '.dmg' for p in files) == 2
+          assert sum(p.suffix == '.exe' for p in files) == 1
+          assert sum(p.suffix == '.msi' for p in files) == 1
+          with open('dist/SHA256SUMS.txt', 'w') as output:
+              for path in files:
+                  assert path.stat().st_size > 1_000_000, f'Installer too small: {path}'
+                  output.write(f'{hashlib.file_digest(path.open("rb"), "sha256").hexdigest()}  {path.name}\n')
+          PY
+      - name: Publish immutable candidate
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')
+          tag="$version-rc.$GITHUB_RUN_NUMBER.$GITHUB_RUN_ATTEMPT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          gh release create "$tag" dist/* --target "$GITHUB_SHA" --prerelease \
+            --title "Pod $tag — Windows and macOS" --notes-file docs/releases/0.7.7.md
+
+  publish:
+    needs: candidate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Publish the proven candidate's exact binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_TAG: ${{ needs.candidate.outputs.tag }}
+          VERSION: ${{ needs.candidate.outputs.version }}
+        run: |
+          set -euo pipefail
+          candidate_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$CANDIDATE_TAG" --jq '.object.sha')
+          test "$candidate_sha" = "$GITHUB_SHA"
+          mkdir dist
+          gh release download "$CANDIDATE_TAG" --dir dist
+          (cd dist && sha256sum -c SHA256SUMS.txt)
+          # Existing version tags are immutable: a rerun must not replace a release.
+          gh release create "$VERSION" dist/* --target "$GITHUB_SHA" \
+            --title "Pod $VERSION — Windows and macOS" --notes-file docs/releases/0.7.7.md
