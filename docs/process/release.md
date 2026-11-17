@@ -109,12 +109,14 @@ gh run rerun <run-id> --failed
 
 ## partiizan fork: Windows and macOS
 
-The fork's `Fork Windows and macOS Release` workflow is independent of the original maintainer's R2 cache,
+The fork's `Windows and Apple Silicon Release` workflow is independent of the original maintainer's R2 cache,
 telemetry, signing credentials, updater publication, Discord announcements, and website deployment. It runs when
 `Cargo.toml` or its workflow changes on `main`, and can also be started with **Run workflow**.
 
-It generates item icons, runs Linux validation and native Windows/macOS tests, and packages Windows x64 plus both
-Mac architectures. The candidate job publishes an immutable prerelease only after every required job passes.
+It replaces the inherited Build and Release workflows, avoiding duplicate build matrices. All jobs run on
+Windows x64 or Apple Silicon runners. It generates item icons, runs Rust formatting/lint checks on Apple Silicon
+and native tests on both platforms, and packages Windows x64 and Apple Silicon. The candidate job publishes an
+immutable prerelease only after every required job passes.
 The final job verifies that candidate's commit and checksums, then publishes the same binaries under the numeric
 version tag. It never moves a tag or overwrites an existing release. GitHub Actions must be enabled on the fork.
 

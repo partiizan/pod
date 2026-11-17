@@ -14,7 +14,7 @@ and this project adheres to [Semver versioning](https://semver.org/).
 - Live skill-name search in the multi-character Skills comparison. Matching groups open automatically; clearing
   restores previous group expansion. Search remains available while scrolling and uses local skill data.
 - Horizontal scrolling for large skill comparisons so pilot columns and the Add Pilot control remain usable.
-- A fork release workflow that validates and packages Windows x64 and both Apple Silicon and Intel macOS builds,
+- A fork release workflow that validates and packages Windows x64 and Apple Silicon macOS builds,
   without requiring the original maintainer's infrastructure. Installers are unsigned; automatic updates are disabled
   unless a signing key is configured. Release downloads are published to partiizan/pod.
 
