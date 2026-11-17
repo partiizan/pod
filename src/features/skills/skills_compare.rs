@@ -1,6 +1,7 @@
 mod header;
 mod matrix;
 mod model;
+mod search;
 mod summary;
 
 use std::collections::{HashMap, HashSet};
@@ -8,12 +9,15 @@ use std::collections::{HashMap, HashSet};
 use iced::{
   Background, Color, Element, Length, Padding, Task,
   alignment::Horizontal,
-  widget::{Column, container, scrollable},
+  widget::{Column, container, operation, responsive, scrollable},
 };
 pub(super) use model::CompareModel;
 
 use crate::{
-  features::{roster::OwnedPilot, skills::browse::SkillCatalog},
+  features::{
+    roster::OwnedPilot,
+    skills::browse::{SkillCatalog, SkillCatalogEntry, SkillCatalogGroup},
+  },
   store::{
     Database, images,
     repo::{character, skills},
@@ -27,6 +31,9 @@ use crate::{
 pub(super) const CONTENT_MAX_WIDTH: f32 = 1180.0;
 pub(super) const HEADER_HEIGHT: f32 = 72.0;
 pub(super) const LABEL_COLUMN_WIDTH: f32 = 200.0;
+
+const BODY_SCROLL_ID: &str = "skills-compare-body";
+const PILOT_COLUMN_MIN_WIDTH: f32 = 180.0;
 
 #[derive(Clone, Debug)]
 pub struct Loaded {
@@ -51,6 +58,7 @@ pub enum Message {
   PickerToggled,
   PilotAdded(i64),
   PilotRemoved(i64),
+  SkillQueryChanged(String),
 }
 
 impl Message {
@@ -69,6 +77,7 @@ pub struct State {
   picker_query: String,
   roster: Vec<OwnedPilot>,
   selected_ids: Vec<i64>,
+  skill_query: String,
 }
 
 impl State {
@@ -89,6 +98,7 @@ impl State {
       picker_query: String::new(),
       roster,
       selected_ids,
+      skill_query: String::new(),
     }
   }
 
@@ -108,7 +118,7 @@ impl State {
   }
 
   pub(super) fn is_expanded(&self, group_id: i64) -> bool {
-    self.expanded.contains(&group_id)
+    !self.skill_query.trim().is_empty() || self.expanded.contains(&group_id)
   }
 
   pub(super) fn model(&self, pilot_id: i64) -> Option<&CompareModel> {
@@ -157,6 +167,23 @@ impl State {
     &self.catalog
   }
 
+  pub(super) fn visible_groups(&self) -> Vec<(&SkillCatalogGroup, Vec<&SkillCatalogEntry>)> {
+    let query = self.skill_query.trim().to_lowercase();
+    self
+      .catalog
+      .groups
+      .iter()
+      .filter_map(|group| {
+        let skills: Vec<_> = group
+          .skills
+          .iter()
+          .filter(|skill| query.is_empty() || skill.name.to_lowercase().contains(&query))
+          .collect();
+        (!skills.is_empty()).then_some((group, skills))
+      })
+      .collect()
+  }
+
   pub fn stale_images(&self) -> Vec<(images::ImageKind, i64)> {
     self
       .selected_ids
@@ -182,6 +209,9 @@ pub fn update(state: &mut State, message: Message, db: &Database) -> Task<Messag
       Task::none()
     }
     Message::GroupToggled(group_id) => {
+      if !state.skill_query.trim().is_empty() {
+        return Task::none();
+      }
       if !state.expanded.remove(&group_id) {
         state.expanded.insert(group_id);
       }
@@ -220,27 +250,46 @@ pub fn update(state: &mut State, message: Message, db: &Database) -> Task<Messag
       }
       Task::none()
     }
+    Message::SkillQueryChanged(query) => {
+      state.skill_query = query;
+      operation::scroll_to(
+        BODY_SCROLL_ID,
+        operation::AbsoluteOffset {
+          x: 0.0,
+          y: 0.0,
+        },
+      )
+    }
   }
 }
 
 pub fn view(state: &State) -> Element<'_, Message> {
-  let content = container(
-    Column::with_children(vec![summary::summary(state), matrix::matrix(state)])
-      .spacing(spacing::SPACE_6)
-      .width(Length::Fill)
-      .max_width(CONTENT_MAX_WIDTH),
-  )
-  .width(Length::Fill)
-  .align_x(Horizontal::Center)
-  .padding(spacing::SPACE_6);
+  let body = responsive(move |size| {
+    let minimum = LABEL_COLUMN_WIDTH + PILOT_COLUMN_MIN_WIDTH * state.pilot_count() as f32 + spacing::SPACE_6 * 2.0;
+    let width = (size.width - spacing::SPACE_6 * 2.0)
+      .max(minimum)
+      .min(CONTENT_MAX_WIDTH.max(minimum));
+    let content = container(
+      Column::with_children(vec![summary::summary(state), matrix::matrix(state)])
+        .spacing(spacing::SPACE_6)
+        .width(Length::Fixed(width)),
+    )
+    .padding(spacing::SPACE_6);
 
-  let body = scrollable(content)
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .style(crate::ui::style::control::scrollbar);
+    scrollable(content)
+      .id(BODY_SCROLL_ID)
+      .direction(scrollable::Direction::Both {
+        vertical: scrollable::Scrollbar::default(),
+        horizontal: scrollable::Scrollbar::default(),
+      })
+      .width(Length::Fill)
+      .height(Length::Fill)
+      .style(crate::ui::style::control::scrollbar)
+      .into()
+  });
 
   let base = container(
-    Column::with_children(vec![header::header(state), body.into()])
+    Column::with_children(vec![header::header(state), search::search_bar(state), body.into()])
       .width(Length::Fill)
       .height(Length::Fill),
   )
@@ -367,6 +416,103 @@ mod tests {
         .iter()
         .map(|(id, levels, total_sp)| (*id, compare_model(levels, *total_sp)))
         .collect(),
+    }
+  }
+
+  mod skill_search {
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+
+    fn search_state() -> State {
+      let mut state = State::new((1..=24).collect(), (1..=24).map(pilot).collect());
+      state.catalog = catalog();
+      state.catalog.groups[0].skills[0].name = "Jump Drive Calibration".into();
+      state.catalog.groups[0].skills[1].name = "Micro Jump Drive Operation".into();
+      state.catalog.groups[1].skills[0].name = "Missile Launcher Operation".into();
+      state.loading = false;
+      state
+    }
+
+    fn visible_ids(state: &State) -> Vec<(i64, Vec<i64>)> {
+      state
+        .visible_groups()
+        .into_iter()
+        .map(|(group, skills)| (group.id, skills.iter().map(|skill| skill.type_id).collect()))
+        .collect()
+    }
+
+    #[test]
+    fn it_filters_partial_names_case_insensitively_and_hides_empty_groups() {
+      let mut state = search_state();
+      state.skill_query = "  jUmP dRiVe  ".into();
+
+      assert_eq!(visible_ids(&state), vec![(1, vec![10, 11])]);
+      state.skill_query = "CALIB".into();
+      assert_eq!(visible_ids(&state), vec![(1, vec![10])]);
+    }
+
+    #[test]
+    fn it_restores_all_rows_for_empty_or_whitespace_queries() {
+      let mut state = search_state();
+      for query in ["", "  ", "\t\n"] {
+        state.skill_query = query.into();
+        assert_eq!(visible_ids(&state), vec![(1, vec![10, 11]), (2, vec![20])]);
+      }
+    }
+
+    #[test]
+    fn it_returns_no_rows_for_unmatched_names_and_literal_punctuation() {
+      let mut state = search_state();
+      for query in ["not a skill", ".*", "Gunnery"] {
+        state.skill_query = query.into();
+        assert!(visible_ids(&state).is_empty());
+      }
+    }
+
+    #[tokio::test]
+    async fn it_restores_expansion_after_search_even_if_a_filtered_group_is_clicked() {
+      let db = crate::store::open_test().await.unwrap();
+      let mut state = search_state();
+      let _ = update(&mut state, Message::GroupToggled(2), &db);
+      let _ = update(&mut state, Message::SkillQueryChanged("jump drive".into()), &db);
+
+      assert!(state.is_expanded(1));
+      let _ = update(&mut state, Message::GroupToggled(1), &db);
+      assert!(state.is_expanded(1));
+      let _ = update(&mut state, Message::SkillQueryChanged(String::new()), &db);
+      assert!(!state.is_expanded(1));
+      assert!(state.is_expanded(2));
+    }
+
+    #[tokio::test]
+    async fn it_preserves_search_and_pilot_data_through_reload_and_selection_changes() {
+      let db = crate::store::open_test().await.unwrap();
+      let mut state = search_state();
+      let _ = update(&mut state, Message::SkillQueryChanged("jump drive".into()), &db);
+      let mut incoming = loaded(&[(1, &[(10, 5)], 9_000_000), (2, &[], 0)]);
+      incoming.catalog = state.catalog.clone();
+      let _ = update(&mut state, Message::DataLoaded(Box::new(incoming)), &db);
+      let _ = update(&mut state, Message::PilotRemoved(24), &db);
+      let _ = update(&mut state, Message::PickerQueryChanged("24".into()), &db);
+      assert_eq!(
+        state
+          .available_pilots()
+          .iter()
+          .map(|pilot| pilot.id)
+          .collect::<Vec<_>>(),
+        vec![24]
+      );
+      let _ = update(&mut state, Message::PilotAdded(24), &db);
+
+      assert_eq!(state.skill_query, "jump drive");
+      assert_eq!(state.picker_query(), "");
+      assert_eq!(visible_ids(&state), vec![(1, vec![10, 11])]);
+      assert_eq!(state.selected_ids(), &(1..=24).collect::<Vec<_>>());
+      assert_eq!(state.model(1).unwrap().total_sp, 9_000_000);
+      assert_eq!(state.model(1).unwrap().levels.get(&10), Some(&5));
+      assert!(state.model(2).unwrap().levels.is_empty());
+      assert_eq!(state.model(1).unwrap().group(1).unwrap().total, 2);
     }
   }
 

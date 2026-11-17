@@ -1,7 +1,7 @@
 use iced::{
   Background, Border, Color, Element, Length, Padding,
   alignment::Vertical,
-  widget::{Column, Row, Space, button, container, text},
+  widget::{Column, Row, Space, button, container, scrollable, text},
 };
 
 use super::{HEADER_HEIGHT, Message, State};
@@ -55,7 +55,12 @@ pub(super) fn header(state: &State) -> Element<'_, Message> {
   let bar = Row::with_children(vec![
     container(title).width(Length::Shrink).into(),
     divider(),
-    chips.into(),
+    scrollable(chips.width(Length::Shrink))
+      .direction(scrollable::Direction::Horizontal(scrollable::Scrollbar::default()))
+      .width(Length::Fill)
+      .height(Length::Fill)
+      .style(crate::ui::style::control::scrollbar)
+      .into(),
     add_pilot(state),
   ])
   .spacing(spacing::SPACE_6)

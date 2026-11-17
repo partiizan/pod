@@ -106,3 +106,28 @@ gh run rerun <run-id> --failed
 > [!TIP]
 > Driving the repo with jj instead of git? The equivalents are `jj bookmark` to advance `main`, `jj tag set <name> -r
 > <change-id>` to place the tag, and `jj git push && git push origin --tags` to publish. The process above is identical.
+
+## partiizan fork: Windows and macOS
+
+The fork's `Windows and Apple Silicon Release` workflow is independent of the original maintainer's R2 cache,
+telemetry, signing credentials, updater publication, Discord announcements, and website deployment. It runs when
+`Cargo.toml` or its workflow changes on `main`, and can also be started with **Run workflow**.
+
+It replaces the inherited Build and Release workflows, avoiding duplicate build matrices. All jobs run on
+Windows x64 or Apple Silicon runners. It generates item icons, runs Rust formatting/lint checks on Apple Silicon
+and native tests on both platforms, and packages Windows x64 and Apple Silicon. The candidate job publishes an
+immutable prerelease only after every required job passes.
+The final job verifies that candidate's commit and checksums, then publishes the same binaries under the numeric
+version tag. It never moves a tag or overwrites an existing release. GitHub Actions must be enabled on the fork.
+
+These installers are unsigned and not notarized; automatic updates are disabled. They retain the original app/data
+identity. Release notes must clearly state these limitations and distinguish automated checks from manual testing.
+For each new version, update `Cargo.toml`, the Pod entry in `Cargo.lock`, `CHANGELOG.md`, and the release notes path in
+`.github/workflows/fork-release.yml`. Only the publication jobs require `contents: write`.
+
+### Current fork platform policy
+
+Ubuntu/Linux build, test, and lint checks are disabled until the repository owner requests their restoration.
+Only Windows x64 and Apple Silicon are release targets. Shared icon preparation and publication run on Windows,
+so an unavailable Apple Silicon runner cannot prevent Windows packaging from starting. Native Mac tests and
+packaging still require an Apple Silicon runner; publication waits for both platforms to succeed.

@@ -2579,6 +2579,13 @@ sp_value = "%{sp} SP"
 at_v = "%{count}×V"
 rank = "×%{rank}"
 
+[skills.compare_search]
+clear = "検索をクリア"
+loading = "スキルを読み込み中…"
+no_matches = "一致するスキルがありません。検索をクリアするとすべて表示されます。"
+placeholder = "スキルを検索…"
+unavailable = "スキルデータを利用できません。キャラクターを同期し、比較を開き直してください。"
+
 [skills.compare_summary]
 skills_at_iv = "IV 以上のスキル"
 skills_at_v = "V のスキル"

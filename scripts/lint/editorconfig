@@ -3,4 +3,4 @@
 
 set -e
 
-ec -config .config/editorconfig-checker.json
+editorconfig-checker -config .config/editorconfig-checker.json

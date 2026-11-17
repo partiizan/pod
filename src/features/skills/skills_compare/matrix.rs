@@ -32,11 +32,24 @@ const SKILL_PAD_Y: f32 = 7.0;
 const SKILL_RULE_ALPHA: f32 = 0.05;
 
 pub(super) fn matrix(state: &State) -> Element<'_, Message> {
-  let groups = &state.skill_catalog().groups;
+  let groups = state.visible_groups();
+  if state.loading || groups.is_empty() {
+    let label = if state.loading {
+      t!("skills.compare_search.loading")
+    } else if state.skill_catalog().groups.is_empty() {
+      t!("skills.compare_search.unavailable")
+    } else {
+      t!("skills.compare_search.no_matches")
+    };
+    return container(text(label).size(typography::size::MD))
+      .padding(spacing::SPACE_6)
+      .width(Length::Fill)
+      .into();
+  }
 
   let mut rows: Vec<Element<'_, Message>> = vec![heads_row(state)];
-  for group in groups {
-    rows.push(group_block(state, group));
+  for (group, skills) in groups {
+    rows.push(group_block(state, group, skills));
   }
 
   container(Column::with_children(rows).width(Length::Fill))
@@ -62,7 +75,11 @@ fn avg_leaders(averages: &[f64]) -> Vec<bool> {
   averages.iter().map(|value| (max - value).abs() < 1e-9).collect()
 }
 
-fn group_block<'a>(state: &State, group: &'a SkillCatalogGroup) -> Element<'a, Message> {
+fn group_block<'a>(
+  state: &State,
+  group: &'a SkillCatalogGroup,
+  skills: Vec<&'a SkillCatalogEntry>,
+) -> Element<'a, Message> {
   let ids = state.selected_ids();
   let leaders = group_leaders(state, group.id);
 
@@ -84,7 +101,7 @@ fn group_block<'a>(state: &State, group: &'a SkillCatalogGroup) -> Element<'a, M
   ];
 
   if state.is_expanded(group.id) {
-    for skill in &group.skills {
+    for skill in skills {
       block.push(skill_row(state, skill));
     }
   }

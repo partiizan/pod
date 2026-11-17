@@ -2579,6 +2579,13 @@ sp_value = "%{sp} SP"
 at_v = "%{count}×V"
 rank = "×%{rank}"
 
+[skills.compare_search]
+clear = "검색 지우기"
+loading = "스킬 불러오는 중…"
+no_matches = "일치하는 스킬이 없습니다. 검색을 지우면 모든 스킬이 표시됩니다."
+placeholder = "스킬 검색…"
+unavailable = "스킬 데이터를 사용할 수 없습니다. 캐릭터를 동기화하고 비교를 다시 여세요."
+
 [skills.compare_summary]
 skills_at_iv = "IV+ 스킬"
 skills_at_v = "V 스킬"

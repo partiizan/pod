@@ -2800,6 +2800,13 @@ sp_value = "%{sp} SP"
 at_v = "%{count}×V"
 rank = "×%{rank}"
 
+[skills.compare_search]
+clear = "Clear search"
+loading = "Loading skills…"
+no_matches = "No matching skills. Clear the search to show all skills."
+placeholder = "Search skills…"
+unavailable = "Skill data unavailable. Sync your characters and reopen Compare."
+
 [skills.compare_summary]
 skills_at_iv = "Skills at IV+"
 skills_at_v = "Skills at V"

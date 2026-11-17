@@ -431,3 +431,16 @@ total. Expand a group to see each skill, where the cell shows five pips and the
 Roman level, or a dash when untrained. The leading column for each group and each
 skill is marked in the pilot's color, and rows where no one has the skill have no
 leader.
+
+### Searching the comparison
+
+Use **Search skills…** below the pilot header to filter skill names across every selected pilot as you type.
+Search is case-insensitive and accepts partial names: for example, `jump drive` shows matching Navigation skills.
+Only matching skills and their groups remain visible, and matching groups open automatically. **Clear search**
+restores all skills and your previous group expansion state. A pilot with an untrained matching skill stays in the
+comparison with the existing untrained indicator.
+
+Pilot totals and group mastery statistics still describe the full skill set. The search is independent of
+**Search pilots…** in the Add Pilot menu and survives adding/removing pilots or reloading comparison data.
+The input stays above the scrolling results; wide comparisons scroll horizontally so pilot columns remain readable.
+Filtering uses local data, including completed training, and makes no additional ESI requests.

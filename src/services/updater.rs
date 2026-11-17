@@ -424,7 +424,7 @@ mod tests {
     );
     assert_eq!(
       UPDATE_ENDPOINT,
-      "https://github.com/aaronmallen/pod/releases/latest/download/latest.json"
+      "https://github.com/partiizan/pod/releases/latest/download/latest.json"
     );
   }
 
